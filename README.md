@@ -47,29 +47,29 @@ Static, pre-allocated buffers (rather than dynamic concatenation) are used becau
 
 Generation follows the standard two-phase inference protocol:
 
-1.  **Prefill**: the prompt is fed token-by-token to populate the cache for all prompt positions (equivalent in cost to one parallel forward pass).
-2.  **Decode**: each newly generated token is fed individually; only its own key/value pair is computed, while all past keys/values are read from the cache.
+1. **Prefill**: the prompt is fed token-by-token to populate the cache for all prompt positions (equivalent in cost to one parallel forward pass).
+2. **Decode**: each newly generated token is fed individually; only its own key/value pair is computed, while all past keys/values are read from the cache.
 
 ### Memory footprint
 
 For $L$ layers, $H$ heads, head dimension $d_h$, and maximum sequence length $T$:
 
-$$\text{KV cache size} = 2 \cdot L \cdot H \cdot T \cdot d_h \cdot \text{bytes\_per\_float}$$
+$$\text{KV cache size} = 2 \cdot L \cdot H \cdot T \cdot d_h \cdot \text{bytes per float}$$
 
 where the factor 2 accounts for storing both keys and values — this is the fundamental compute/memory trade-off underlying KV caching.
 
 ## Approach / Methodology
 
-1.  **Data pipeline**: WikiText-2 (raw) is tokenized with the GPT-2 BPE tokenizer, concatenated with `<eos>` article boundaries, and packed into fixed-length, overlapping input/target windows for efficient batched training.
-2.  **Baseline model**: a `TransformerLM` (Equinox module) is trained with AdamW, weight decay, linear warm-up, and cosine learning-rate decay, minimizing token-level cross-entropy.
-3.  **KV-cache model**: a structurally identical `KVCacheTransformerLM` is built, with an attention/block/model implementation that dispatches between a full-sequence training path and a single-token cached inference path.
-4.  **Correctness verification**: parameter counts and training-mode logits are checked for exact numerical agreement between the baseline and KV-cache model; greedy decoding with and without the cache is verified to produce identical token sequences on the same weights.
-5.  **Benchmarking**: wall-clock generation time and tokens/second are compared between cached and non-cached decoding for a fixed number of generated tokens, using `jax.block_until_ready` for accurate timing under JAX's asynchronous dispatch.
+1. **Data pipeline**: WikiText-2 (raw) is tokenized with the GPT-2 BPE tokenizer, concatenated with `<eos>` article boundaries, and packed into fixed-length, overlapping input/target windows for efficient batched training.
+2. **Baseline model**: a `TransformerLM` (Equinox module) is trained with AdamW, weight decay, linear warm-up, and cosine learning-rate decay, minimizing token-level cross-entropy.
+3. **KV-cache model**: a structurally identical `KVCacheTransformerLM` is built, with an attention/block/model implementation that dispatches between a full-sequence training path and a single-token cached inference path.
+4. **Correctness verification**: parameter counts and training-mode logits are checked for exact numerical agreement between the baseline and KV-cache model; greedy decoding with and without the cache is verified to produce identical token sequences on the same weights.
+5. **Benchmarking**: wall-clock generation time and tokens/second are compared between cached and non-cached decoding for a fixed number of generated tokens, using `jax.block_until_ready` for accurate timing under JAX's asynchronous dispatch.
 
 ## Key Terms
 
 | Term | Meaning |
-|------------------------------------|------------------------------------|
+|---|---|
 | Prefill | Parallel processing of the full input prompt to populate the cache |
 | Decode | Sequential, one-token-at-a-time generation using cached states |
 | Causal mask | Lower-triangular mask preventing attention to future tokens |
@@ -82,7 +82,7 @@ where the factor 2 accounts for storing both keys and values — this is the fun
 - The KV-cache model is verified to be numerically equivalent to the baseline in training mode (max logit difference within floating-point tolerance).
 - Greedy decoding with and without the cache produces identical generated token sequences on the same trained weights, confirming correctness.
 - The cached decoding path achieves a measurable speedup in tokens/second over the non-cached path when generating a fixed number of new tokens, consistent with the theoretical reduction in redundant attention computation.
-- Qualitatively, generated text reflects the capacity of a small (\~16M parameter), lightly trained model — locally coherent but prone to repetition under greedy decoding, which is expected behavior rather than an implementation defect.
+- Qualitatively, generated text reflects the capacity of a small (~16M parameter), lightly trained model — locally coherent but prone to repetition under greedy decoding, which is expected behavior rather than an implementation defect.
 
 ## Libraries Used
 
@@ -97,14 +97,15 @@ where the factor 2 accounts for storing both keys and values — this is the fun
 
 ## Repository Structure
 
-```         
+```text
 .
 └── main.ipynb   # Full assignment notebook: data pipeline, baseline model,
-                  # training, KV-cache implementation, correctness checks,
-                  # and inference speed benchmark.
+                 # training, KV-cache implementation, correctness checks,
+                 # and inference speed benchmark.
+
 ```
 
 ## References
 
-- Google, *How to Scale Your Model — Inference*, JAX Scaling Book. <https://jax-ml.github.io/scaling-book/inference/>
-- Raschka, S., *Coding the KV Cache in LLMs*. <https://magazine.sebastianraschka.com/p/coding-the-kv-cache-in-llms>
+* Google, *How to Scale Your Model — Inference*, JAX Scaling Book. [https://jax-ml.github.io/scaling-book/inference/](https://jax-ml.github.io/scaling-book/inference/)
+* Raschka, S., *Coding the KV Cache in LLMs*. [https://magazine.sebastianraschka.com/p/coding-the-kv-cache-in-llms](https://magazine.sebastianraschka.com/p/coding-the-kv-cache-in-llms)
